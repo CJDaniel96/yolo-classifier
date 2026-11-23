@@ -11,7 +11,7 @@ from .config import load_config
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="AOI YOLO OBB folder microservice")
     parser.add_argument("--config", type=Path, default=Path("config.json"))
-    parser.add_argument("--check-config", action="store_true", help="Validate paths and model file, then exit")
+    parser.add_argument("--check-config", action="store_true", help="Validate paths, model file and BOM list, then exit")
     parser.add_argument("--once", action="store_true", help="Run one scan cycle, then exit (use stable_seconds=0 for fixtures)")
     parser.add_argument("--retry-failed", action="store_true", help="Requeue failed jobs at startup")
     args = parser.parse_args(argv)
@@ -25,7 +25,7 @@ def main(argv: list[str] | None = None) -> int:
         logging.basicConfig(level=level, format="%(asctime)s %(levelname)s %(name)s %(message)s",
                             handlers=[logging.StreamHandler(), handler], force=True)
         if args.check_config:
-            print("Configuration valid. Model file exists; model loading is checked at startup.")
+            print("Configuration valid. Model file exists and BOM list is valid; model loading is checked at startup.")
             return 0
         from .inference import Predictor
         from .service import Service

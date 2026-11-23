@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import threading
 import time
@@ -12,6 +13,7 @@ from pathlib import Path
 from typing import Any, Callable, Protocol
 
 from .config import Config
+from .bom import load_bom
 from .files import ProcessLock, archive_folder, atomic_bytes, digest, direct_file, verified_copy
 from .regions import CropBox
 from .state import State
@@ -19,7 +21,7 @@ from .xmlio import Document, referenced_names
 from .yolo_rules import Decision
 
 LOG = logging.getLogger(__name__)
-INFERENCE_SCHEMA = "image-roi-v1"
+INFERENCE_SCHEMA = "chiprc-bom-roi-v1"
 
 
 class InferenceBackend(Protocol):
@@ -34,18 +36,25 @@ class Service:
     def __init__(self, config: Config, predictor: InferenceBackend | Callable[[], InferenceBackend],
                  clock: Callable[[], float] = time.time):
         self.config, self.clock = config, clock
+        self.allowed_types = load_bom(config.paths.bom_list)
+        self.selection_fingerprint = hashlib.sha256(json.dumps({
+            "types": sorted(self.allowed_types),
+            "statuses": sorted({s.strip().casefold() for s in config.watch.failure_statuses}),
+        }, ensure_ascii=False).encode()).hexdigest()
         self.process_lock = ProcessLock(config.paths.state_db.with_suffix(".lock"))
         try:
             self.state = State(config.paths.state_db)
-            # Never publish cached whole-image results after upgrading to ROI inference.
+            # Unpublished results must obey the current ROI and component-selection rules.
             pending = [] if config.runtime.dry_run else self.state.jobs("publishing")
             for job in pending:
-                if job["payload"].get("inference_schema") != INFERENCE_SCHEMA:
+                if (job["payload"].get("inference_schema") != INFERENCE_SCHEMA or
+                        job["payload"].get("selection_fingerprint") != self.selection_fingerprint):
                     self.state.update(job["id"], self.clock(), status="waiting", attempts=0,
                                       created=self.clock(),
                                       next_try=0, payload={},
-                                      error="Unpublished whole-image result invalidated; ROI inference required")
+                                      error="Unpublished result invalidated; current ROI/BOM selection rules required")
             self.predictor = predictor() if callable(predictor) else predictor
+            LOG.info("Loaded %d ChipRC part numbers from %s", len(self.allowed_types), config.paths.bom_list)
         except BaseException:
             if hasattr(self, "state"):
                 self.state.close()
@@ -168,9 +177,10 @@ class Service:
             destination = archive_folder(source.name, self.config.paths.archive_dir)
             try:
                 document = Document(data, self.config.watch.failure_statuses,
-                                    self.config.inference.ext)
+                                    self.config.inference.ext, self.allowed_types)
             except ET.ParseError as exc:
                 raise NotReady(f"XML is incomplete or malformed: {exc}") from exc
+            LOG.info("Component selection for %s: %s", source.name, document.selection)
             paths = [self.config.paths.image_input / name for name in document.image_names]
             for path in paths:
                 direct_file(path, self.config.paths.image_input)
@@ -198,6 +208,8 @@ class Service:
             ET.fromstring(result)
             payload = {
                 "inference_schema": INFERENCE_SCHEMA,
+                "selection_fingerprint": self.selection_fingerprint,
+                "component_selection": document.selection,
                 "manifest": manifest, "archive_dir": str(destination),
                 "after_success": self.config.archive.after_success,
                 "archive_copied": False, "output": str(self.config.paths.xml_output / source.name),

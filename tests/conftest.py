@@ -51,7 +51,7 @@ def write_xml(config, name="20261111000316_BOARD.xml", pairs=None):
     board = ET.SubElement(root, "Board", Status="FAIL", BoardSN="unchanged")
     pairs = pairs or [("top.jpg", "side.jpg")]
     for index, pair in enumerate(pairs):
-        comp = ET.SubElement(board, "Component", CompName=f"C{index}", Status="FAIL",
+        comp = ET.SubElement(board, "Component", CompName=f"C{index}", Status="False Call", Type="TEST_PART",
                              AI_result="", MachineDefect="Shift")
         images = ET.SubElement(comp, "CompImage")
         ET.SubElement(images, "Image", PicPath1=f"old/path/{pair[0]}",
@@ -69,6 +69,8 @@ def config(tmp_path):
         "watch": {"stable_seconds": 0, "poll_seconds": 1, "retry_seconds": 1,
                   "image_wait_timeout_seconds": 30, "max_retries": 2}
     }).resolve_paths(tmp_path)
+    settings.paths.bom_list.parent.mkdir(parents=True, exist_ok=True)
+    settings.paths.bom_list.write_text("TEST_PART\n", encoding="utf-8")
     settings.prepare(require_model=False)
     return settings
 

@@ -8,6 +8,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, model_validator
 
+from .bom import load_bom
+
 
 class Settings(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False, validate_default=True)
@@ -20,6 +22,7 @@ class Paths(Settings):
     archive_dir: Path | None = None
     state_db: Path = Path("runtime/jobs.sqlite3")
     log_dir: Path = Path("logs")
+    bom_list: Path = Path("bom/1001_T1_BOM_List.txt")
 
 
 class Inference(Settings):
@@ -48,7 +51,7 @@ class Watch(Settings):
     image_wait_timeout_seconds: float = Field(default=300, gt=0)
     retry_seconds: float = Field(default=10, gt=0)
     max_retries: StrictInt = Field(default=3, ge=1)
-    failure_statuses: list[str] = Field(default_factory=lambda: ["FAIL", "NG"], min_length=1)
+    failure_statuses: list[str] = Field(default_factory=lambda: ["False Call"], min_length=1)
 
 
 class Archive(Settings):
@@ -94,7 +97,7 @@ class Config(Settings):
         def absolute(path: Path) -> Path:
             return (base / path).resolve()
 
-        for key in ("xml_input", "image_input", "xml_output", "state_db", "log_dir"):
+        for key in ("xml_input", "image_input", "xml_output", "state_db", "log_dir", "bom_list"):
             setattr(self.paths, key, absolute(getattr(self.paths, key)))
         self.paths.archive_dir = absolute(
             self.paths.archive_dir or self.paths.xml_input / "DONE"
@@ -122,6 +125,7 @@ class Config(Settings):
     def prepare(self, require_model: bool = True) -> None:
         if require_model and not self.inference.model.is_file():
             raise ValueError(f"Model file not found: {self.inference.model}")
+        load_bom(self.paths.bom_list)
         for directory in (self.paths.xml_input, self.paths.image_input,
                           self.paths.xml_output, self.paths.log_dir,
                           self.paths.state_db.parent):

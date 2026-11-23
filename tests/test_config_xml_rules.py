@@ -32,6 +32,8 @@ def test_json_relative_paths_and_skip_count(tmp_path):
     config = load_config(path)
     assert config.paths.xml_input == tmp_path / "input/xml"
     assert config.paths.archive_dir == tmp_path / "input/xml/DONE"
+    assert config.paths.bom_list == tmp_path / "bom/1001_T1_BOM_List.txt"
+    assert config.watch.failure_statuses == ["False Call"]
     assert config.inference.ok_count is None
 
 
@@ -78,12 +80,12 @@ def test_invalid_archive_filename_rejected(tmp_path, filename):
 
 
 def test_multiple_image_nodes_and_windows_paths():
-    raw = b'''<Panel><Board><Component Status="FAIL" AI_result="">
+    raw = b'''<Panel><Board><Component Status="FAIL" Type="TEST_PART" AI_result="">
     <CompImage><Image PicPath1="old/a.jpg" PicPath2="old/b.jpg" X1="1" Y1="2" X2="10" Y2="20"/>
     <Image PicPath1="old\\c.jpg" PicPath2="old\\d.jpg" X1="3" Y1="4" X2="30" Y2="40"/></CompImage>
     <Window PicPath1="ignored.jpg" AI_result="untouched"/></Component>
     <Component Status="PASS" AI_result="keep"/></Board></Panel>'''
-    document = Document(raw, ["FAIL"], [".jpg"])
+    document = Document(raw, ["FAIL"], [".jpg"], {"TEST_PART"})
     assert document.image_names == ["a.jpg", "b.jpg", "c.jpg", "d.jpg"]
     result = ET.fromstring(document.result({region.key: region.filename != "c.jpg"
                                           for region in document.regions}))
@@ -94,9 +96,9 @@ def test_multiple_image_nodes_and_windows_paths():
 
 
 def test_missing_second_light_is_an_error():
-    raw = b'<Panel><Board><Component Status="FAIL"><CompImage><Image PicPath1="a.jpg" X1="0" Y1="0" X2="10" Y2="10"/></CompImage></Component></Board></Panel>'
+    raw = b'<Panel><Board><Component Status="FAIL" Type="TEST_PART"><CompImage><Image PicPath1="a.jpg" X1="0" Y1="0" X2="10" Y2="10"/></CompImage></Component></Board></Panel>'
     with pytest.raises(ValueError):
-        Document(raw, ["FAIL"], [".jpg"])
+        Document(raw, ["FAIL"], [".jpg"], {"TEST_PART"})
 
 
 def rectangle(x1=40, y1=45, x2=60, y2=55, class_id=0, confidence=0.9):

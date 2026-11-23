@@ -1,6 +1,7 @@
 # AOI YOLO OBB 微服務
 
-在 Windows 上監控 XML 與影像兩個輸入資料夾，依 XML 的 Image 座標裁切原圖，使用 YOLO OBB 模型複判 AOI NG 元件，
+在 Windows 上監控 XML 與影像兩個輸入資料夾，只對 Status 為 False Call 且 Type 在 ChipRC BOM 清單內的元件，
+依 XML 的 Image 座標裁切原圖，使用 YOLO OBB 模型推論，
 輸出更新 `Component.AI_result` 的 XML，再將原始 XML 與影像歸檔。
 
 ## Windows 部署
@@ -11,7 +12,8 @@
    PyTorch、torchvision 與 Ultralytics 版本沿用原 CLI 專案的鎖定版本。
    GPU 與驅動需支援選用的 CUDA 版本，可參考 [PyTorch 安裝文件](https://pytorch.org/get-started/locally/)。
 3. 將自行訓練的 OBB 權重放到 `models/best.pt`，或修改 `inference.model`。
-4. 編輯 `config.json`，至少確認輸入／輸出路徑、模型路徑、`ok_label`、`ok_count` 及 `device`。
+4. 編輯 `config.json`，至少確認輸入／輸出路徑、模型與 BOM 清單路徑、`ok_label`、`ok_count` 及 `device`。
+   BOM 預設使用隨附的 `bom/1001_T1_BOM_List.txt`，每行一個料號。
 5. 雙擊 `start.bat`。啟動會檢查設定、載入模型並驗證 OK 類別，接著開始監控。
 
 `inference.device` 預設為 `"cpu"`；GPU 部署時改為 `0` 或 `"0"`。
@@ -37,12 +39,13 @@ Windows 絕對路徑建議寫成 `"D:/AOI/XML"`；若使用反斜線，JSON 內�
 | `paths.archive_dir` | 歸檔根目錄，預設 `input/xml/DONE`；省略或 `null` 時為 XML 輸入下的 `DONE` |
 | `paths.state_db` | 本機 SQLite 工作紀錄，預設 `runtime/jobs.sqlite3` |
 | `paths.log_dir` | 日誌位置，預設 `logs` |
+| `paths.bom_list` | ChipRC 料號清單，預設 `bom/1001_T1_BOM_List.txt` |
 | `watch.poll_seconds` | 掃描間隔，預設 2 秒 |
 | `watch.stable_seconds` | 檔案大小及修改時間維持不變的等待時間，預設 2 秒 |
 | `watch.image_wait_timeout_seconds` | XML 進入待處理狀態後，等待完整 XML／影像的上限，預設 300 秒 |
 | `watch.retry_seconds` | 推論、輸出與歸檔錯誤的重試間隔，預設 10 秒 |
 | `watch.max_retries` | 推論／資料驗證失敗的嘗試上限，預設 3 次 |
-| `watch.failure_statuses` | 需要推論的 Component Status，預設 `["FAIL", "NG"]`，忽略大小寫 |
+| `watch.failure_statuses` | 需要推論的 Component Status，預設 `["False Call"]`，去除前後空白並忽略大小寫 |
 | `archive.after_success` | `archive`（預設）、`delete` 或 `keep` |
 | `archive.retention_days` | 歸檔保留天數，預設 `null` 不自動清除 |
 | `http.host` / `http.port` | 預設 `127.0.0.1:8000` |
@@ -51,6 +54,26 @@ Windows 絕對路徑建議寫成 `"D:/AOI/XML"`；若使用反斜線，JSON 內�
 所有影像均透過 XML 引用尋找，不會推論資料夾內尚無 XML 引用的影像。
 輸入、結果輸出、歸檔及複查路徑會檢查是否有不安全的重疊。
 工作紀錄請放在主機本機磁碟；多個服務不可共用同一輸入資料夾。
+
+## ChipRC 元件篩選與 BOM
+
+推論前先逐一檢查 `Component`，必須同時符合：
+
+1. `Status="False Call"`（由 `watch.failure_statuses` 設定）。Panel 與 Board 的 Status 不作為元件推論條件。
+2. `Type` 完整命中 BOM TXT 中的某一行；只移除前後空白，保留大小寫，不做子字串或部分比對，也不使用 PartNo。
+
+例如 BOM 含 `06-210153-05` 時，`Type="06-210153-05"` 會推論，
+`Type="06-210153-05-extra"` 或只有 `PartNo="06-210153-05"` 不會推論。
+`Fail`、`NG`、`PASS` 或 Type 不在清單內的元件，都保留原有 AI_result（包括空值或原本不存在此屬性的情況）。
+跳過的元件不會驗證裁切座標、不等待影像、不推論，也不搬動其影像。
+
+TXT 使用 UTF-8（支援 BOM 標記及 Windows CRLF），每行一個料號，空白行忽略，重複料號只載入一次。
+預設檔案為你提供的 62 個料號；可在設定檔更換清單路徑。BOM 遺失、無法讀取或沒有任何料號時會阻止啟動。
+BOM 於啟動時載入，修改清單後需重新啟動。由舊版升級時，也請將現有設定檔中的 failure_statuses 改為 `["False Call"]`。
+
+這次提供的線上 XML 元件 `R478_1` 的 Type 為 `RC0402_APL`，不在提供的 BOM 中，依規則會跳過。
+若整份 XML 都沒有符合的元件，仍輸出保留原有結果的 XML 並歸檔原始 XML，所有未推論影像保留在輸入資料夾。
+日誌與 `/jobs` 的 `component_selection` 會顯示總元件數、選取數，以及依狀態或 BOM 跳過的數量。
 
 ### 原 CLI 參數對應
 
@@ -85,6 +108,16 @@ VOC 的框為 OBB 的軸對齊外接矩形，旋轉量測保存在 JSON。框與
 每個需要推論的 `Component/CompImage/Image` 都必須提供 `X1`、`Y1`、`X2`、`Y2`：
 
 ```xml
+<CompImage>
+  <Image PicPath="old/path/R478_1_SolderLight.jpg" X1="165" Y1="175" X2="475" Y2="305" />
+  <Image PicPath="old/path/R478_1_UniformLight.jpg" X1="165" Y1="175" X2="475" Y2="305" />
+</CompImage>
+```
+
+線上格式每個 Image 使用 `PicPath` 指向一種光源，各自依該節點的座標裁切；忽略 `PicPathStd` 的標準影像。
+同一元件至少需兩個光源影像引用，全部推論 OK 才寫入 OK。亦相容先前一個 Image 包含兩個路徑的格式：
+
+```xml
 <Image PicPath1="old/path/top.jpg" PicPath2="old/path/side.jpg"
        X1="10" Y1="10" X2="70" Y2="50" />
 ```
@@ -109,9 +142,9 @@ VOC 的框為 OBB 的軸對齊外接矩形，旋轉量測保存在 JSON。框與
 
 1. 載入一次 OBB 模型，以單一工作者執行推論；HTTP 狀態查詢在獨立執行緒處理。
 2. 掃描現有與新到達的 XML，等待檔案穩定後建立工作紀錄。
-3. 讀取 `Panel/Board/Component` 中失敗元件的 `CompImage/Image`。
-4. 取得每個 Image 的 `PicPath1`、`PicPath2`，將 `/`、`\` 路徑的最後一段作為檔名，
-   到 `paths.image_input` 尋找；不使用 `Window` 的影像路徑。
+3. 逐一檢查 `Panel/Board/Component`，僅選取 False Call 且 Type 在 BOM 內的元件。
+4. 取得所選元件 Image 的 `PicPath`，或舊格式的 `PicPath1`、`PicPath2`，將 `/`、`\` 路徑的最後一段作為檔名，
+   到 `paths.image_input` 尋找；不使用 `Window` 或 `PicPathStd` 的影像路徑。
 5. 等待所有影像到齊且穩定，依每個 Image 的 X1、Y1、X2、Y2 裁切後推論。
    不同 Image 節點也會全部處理；同份 XML 只有「來源檔案與裁切範圍都相同」才共用一次推論。
 6. 保留原 CLI 的判定：OK 框去重、精確數量或至少一個 OK、至少一個 OK 中心位於中央區域、
@@ -125,9 +158,10 @@ VOC 的框為 OBB 的軸對齊外接矩形，旋轉量測保存在 JSON。框與
    驗證內容雜湊及可解析性後，記錄已輸出狀態。
 10. 結果發布成功後才歸檔；歸檔確認完成後移除來源檔，記錄完成並繼續下一份工作。
 
-提供的範例 XML 包含 17 個失敗元件及 34 個影像引用，但所有 Image 的 X2、Y2 都是空值，
-需由上游補齊像素座標後才能推論。測試保留原始範例不變，驗證缺值時不推論、不輸出、不歸檔；
-另在記憶體中的測試副本補入合法範圍，驗證 17 個元件、34 個裁切推論及 Window 的 AI_result 不被修改。
+先前範例包含 17 個 FAIL 元件及 34 個影像引用，依新版預設狀態會跳過。
+這份舊範例的 X2、Y2 也都是空值，若將元件納入推論範圍，需由上游補齊像素座標。
+測試保留原始範例不變，驗證被選取元件缺座標時不推論、不輸出、不歸檔；另在測試副本中設定
+False Call、允許的 Type 與合法範圍，驗證 17 個元件、34 個裁切推論及 Window 的 AI_result 不被修改。
 若 XML 沒有需要推論的元件，也會正常輸出及歸檔，不呼叫模型。
 
 ## DONE 結構
@@ -135,7 +169,8 @@ VOC 的框為 OBB 的軸對齊外接矩形，旋轉量測保存在 JSON。框與
 日期與時間戳來自 XML **檔名**，不使用處理當下日期。
 線上 XML 檔名格式為 `YYYYMMDDhhmmss_BoardSN.xml`，不需要最後的 `_T` 或正反面欄位；BoardSN 可以包含底線。
 例如 `20261111000316_HA996AQ010070A.xml`，會歸入 `2026-11-11/20261111000316/`。
-結果輸出與歸檔都沿用收到的 XML 原檔名，影像檔名依 XML 的 PicPath1／PicPath2 取得。
+結果輸出與歸檔都沿用收到的 XML 原檔名，影像檔名依 XML 的 PicPath 或 PicPath1／PicPath2 取得。
+也支援這次線上檔名 `20260407133353_20260407 133353T1.xml` 中的空白，不會從 XML 的 BoardSN 重建檔名。
 
 ```text
 input/xml/DONE/
@@ -175,7 +210,8 @@ input/xml/DONE/
 缺圖、不完整 XML 等待逾時，或影像損壞、模型錯誤達重試上限時，整份 XML 不會發布部分結果。
 輸出或歸檔 IO 失敗會持續依 retry_seconds 重試，並在 `/jobs` 顯示原因。
 
-升級至裁切推論版本時，尚未發布、由舊版整張影像推論產生的快取結果會失效並重新依 ROI 推論。
+升級推論／篩選規則，或重啟時 BOM 內容、選取狀態設定已變更，尚未發布的舊快取結果會失效，
+重新依目前的 BOM、Status 與 ROI 規則處理。
 已成功發布的結果不會自動撤回；已完成或正在歸檔的舊工作維持原有紀錄。
 
 結果輸出維持原始檔名：若已有**相同內容**，視為可接續的發布；若已有**不同內容**，
@@ -205,7 +241,7 @@ health 表示服務能運作，個別資料的失敗請查看 jobs。API 預設�
 日誌輸出到視窗及 `logs/service.log`，每檔 10 MiB，保留 10 份輪替檔。
 
 ```bat
-rem 驗證設定與模型檔是否存在（不載入模型）
+rem 驗證設定、模型檔及 BOM 清單（不載入模型）
 start.bat --check-config
 
 rem 持續預覽：先將 config.json 的 runtime.dry_run 設為 true
@@ -230,6 +266,8 @@ python -m pytest -q
 測試使用可控制的推論替身驗證檔案流程，並用實際 OBB 幾何規則驗證去重、角度、包含關係與距離限制；
 模型轉接器以 Ultralytics 介面的替身驗證實際裁切像素、小數座標、範圍檢查、不同 ROI 的獨立判定、
 裁切圖中心量測、參數傳遞、OBB 結果轉換與複查輸出。
+也使用線上 XML 與 BOM 驗證 False Call／Type 完整比對、跳過元件保持原結果、新版 PicPath 光源格式、
+共用影像保留，以及 BOM 更新後未發布結果重新篩選。
 這些測試不代表實際模型準確率或 Windows／CUDA 驅動已驗證。
 
 `aoi_service/yolo_rules.py` 保留提供的 `APL-develop-tools/scripts/yolo_classify.py` 中判定與複查輸出函式，

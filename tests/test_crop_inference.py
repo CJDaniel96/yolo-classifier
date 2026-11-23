@@ -150,11 +150,11 @@ def test_shared_files_with_different_crops_have_independent_component_results(
 
 
 def test_equal_rois_with_signed_zero_share_the_same_verdict_key():
-    raw = b'''<Panel><Board><Component Status="FAIL"><CompImage>
+    raw = b'''<Panel><Board><Component Status="FAIL" Type="TEST_PART"><CompImage>
     <Image PicPath1="top.jpg" PicPath2="side.jpg" X1="0" Y1="0" X2="20" Y2="20"/>
     <Image PicPath1="top.jpg" PicPath2="side.jpg" X1="-0.0" Y1="-0" X2="20.0" Y2="20.0"/>
     </CompImage></Component></Board></Panel>'''
-    document = Document(raw, ["FAIL"], [".jpg"])
+    document = Document(raw, ["FAIL"], [".jpg"], {"TEST_PART"})
     assert len(document.regions) == 2
     assert ET.fromstring(document.result({r.key: True for r in document.regions})).find(
         "./Board/Component").get("AI_result") == "OK"
@@ -163,6 +163,9 @@ def test_equal_rois_with_signed_zero_share_the_same_verdict_key():
 def test_supplied_xml_missing_roi_is_retained_without_inference(config, service_factory, clock):
     fixture = Path(__file__).parent / "fixtures/20261111000316_HA996AQ010070A_T.xml"
     original = fixture.read_bytes()
+    config.watch.failure_statuses = ["FAIL"]
+    root = ET.fromstring(original)
+    config.paths.bom_list.write_text("\n".join({c.get("Type") for c in root.findall("./Board/Component")}))
     source = config.paths.xml_input / fixture.name
     source.write_bytes(original)
     service = service_factory()

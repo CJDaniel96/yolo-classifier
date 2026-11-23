@@ -5,7 +5,8 @@
     "xml_output": "output",
     "archive_dir": "input/xml/DONE",
     "state_db": "runtime/jobs.sqlite3",
-    "log_dir": "logs"
+    "log_dir": "logs",
+    "bom_list": "bom/1001_T1_BOM_List.txt"
   },
   "inference": {
     "model": "models/best.pt",
@@ -30,7 +31,7 @@
     "image_wait_timeout_seconds": 300,
     "retry_seconds": 10,
     "max_retries": 3,
-    "failure_statuses": ["FAIL", "NG"]
+    "failure_statuses": ["False Call"]
   },
   "archive": {
     "after_success": "archive",

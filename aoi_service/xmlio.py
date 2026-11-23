@@ -5,6 +5,7 @@ from __future__ import annotations
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
+from collections.abc import Set
 
 from .files import image_basename
 from .regions import CropBox, ImageRegion
@@ -17,7 +18,8 @@ class Component:
 
 
 class Document:
-    def __init__(self, data: bytes, statuses: list[str], extensions: list[str]):
+    def __init__(self, data: bytes, statuses: list[str], extensions: list[str],
+                 allowed_types: Set[str]):
         if b"<!DOCTYPE" in data.upper() or b"<!ENTITY" in data.upper():
             raise ValueError("DTD/entity declarations are not supported")
         parser = ET.XMLParser(target=ET.TreeBuilder(insert_comments=True, insert_pis=True))
@@ -25,9 +27,15 @@ class Document:
         if self.root.tag.rsplit("}", 1)[-1] != "Panel":
             raise ValueError("Expected an AOI Panel XML document")
         self.components: list[Component] = []
-        failed = {s.upper() for s in statuses}
+        self.selection = {"total": 0, "selected": 0, "skipped_status": 0, "skipped_bom": 0}
+        failed = {s.strip().casefold() for s in statuses}
         for node in self.root.findall("./{*}Board/{*}Component"):
-            if node.get("Status", "").upper() not in failed:
+            self.selection["total"] += 1
+            if node.get("Status", "").strip().casefold() not in failed:
+                self.selection["skipped_status"] += 1
+                continue
+            if node.get("Type", "").strip() not in allowed_types:
+                self.selection["skipped_bom"] += 1
                 continue
             regions: list[ImageRegion] = []
             for image in node.findall("./{*}CompImage/{*}Image"):
@@ -35,14 +43,21 @@ class Document:
                     crop = CropBox.from_attributes(image.attrib)
                 except ValueError as exc:
                     raise ValueError(f"Component {node.get('CompName')}: {exc}") from exc
-                for attr in ("PicPath1", "PicPath2"):
+                # Online AOI emits one PicPath per Image; older exports pair paths.
+                attributes = ("PicPath1", "PicPath2") if (
+                    "PicPath1" in image.attrib or "PicPath2" in image.attrib
+                ) else ("PicPath",)
+                for attr in attributes:
                     name = image_basename(image.get(attr, ""))
                     if Path(name).suffix.lower() not in extensions:
                         raise ValueError(f"Unsupported image extension: {name}")
                     regions.append(ImageRegion(name, crop))
             if not regions:
                 raise ValueError(f"Component {node.get('CompName')} has no CompImage/Image")
+            if len(regions) < 2:
+                raise ValueError(f"Component {node.get('CompName')} requires at least two light-source images")
             self.components.append(Component(node, regions))
+            self.selection["selected"] += 1
 
     @property
     def regions(self) -> list[ImageRegion]:
@@ -66,5 +81,5 @@ def referenced_names(data: bytes) -> set[str]:
     return {
         image_basename(image.get(attr, ""))
         for image in root.findall("./{*}Board/{*}Component/{*}CompImage/{*}Image")
-        for attr in ("PicPath1", "PicPath2") if image.get(attr)
+        for attr in ("PicPath", "PicPath1", "PicPath2") if image.get(attr)
     }

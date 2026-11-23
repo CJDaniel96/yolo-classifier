@@ -30,7 +30,7 @@ def create_app(config: Config,
         finally:
             await asyncio.to_thread(service.close)
 
-    app = FastAPI(title="AOI YOLO OBB Service", version="0.2.0", lifespan=lifespan)
+    app = FastAPI(title="AOI YOLO OBB Service", version="0.3.0", lifespan=lifespan)
 
     @app.get("/health")
     def health():
@@ -50,6 +50,7 @@ def create_app(config: Config,
                  "attempts": j["attempts"], "error": j["error"], "updated": j["updated"],
                  "output": j["payload"].get("output"),
                  "archive_dir": j["payload"].get("archive_dir"),
+                 "component_selection": j["payload"].get("component_selection"),
                  "images": j["payload"].get("images", {})}
                 for j in records]
 

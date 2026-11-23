@@ -7,6 +7,7 @@ import xml.etree.ElementTree as ET
 import pytest
 
 from aoi_service.files import archive_folder, digest
+from aoi_service.bom import load_bom
 from aoi_service.xmlio import Document
 from conftest import FakePredictor, close_service, write_image, write_xml
 
@@ -44,12 +45,16 @@ def test_sample_structure_17_components_34_crops_with_complete_coordinates(confi
     fixture = Path(__file__).parent / "fixtures/20261111000316_HA996AQ010070A_T.xml"
     # Keep the supplied fixture unchanged. It has empty X2/Y2; populate test-only pixel ROIs.
     root = ET.fromstring(fixture.read_bytes())
+    for component in root.findall("./Board/Component"):
+        component.set("Status", "False Call")
+    config.paths.bom_list.write_text("\n".join({c.get("Type") for c in root.findall("./Board/Component")}))
     for image in root.findall("./Board/Component/CompImage/Image"):
         image.attrib.update(X1="10", Y1="10", X2="70", Y2="50")
     data = ET.tostring(root)
     source = config.paths.xml_input / fixture.name.replace("_T.xml", ".xml")
     source.write_bytes(data)
-    document = Document(data, ["FAIL"], config.inference.ext)
+    document = Document(data, config.watch.failure_statuses, config.inference.ext,
+                        load_bom(config.paths.bom_list))
     assert len(document.components) == 17
     assert len(document.image_names) == 34
     for name in document.image_names:
