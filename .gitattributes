@@ -1,0 +1,5 @@
+* text=auto
+*.py text eol=lf
+*.bat text eol=crlf
+# Preserve the supplied AOI fixture byte-for-byte, including Windows line endings.
+tests/fixtures/*.xml -text whitespace=cr-at-eol

@@ -1,0 +1,22 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Runtime and production data
+input/
+output/
+runtime/
+logs/
+review/
+models/*
+!models/.gitkeep
+.pytest_cache/
+.ruff_cache/
+*.sqlite3*

@@ -1,0 +1,53 @@
+{
+  "paths": {
+    "xml_input": "input/xml",
+    "image_input": "input/images",
+    "xml_output": "output",
+    "archive_dir": "input/xml/DONE",
+    "state_db": "runtime/jobs.sqlite3",
+    "log_dir": "logs"
+  },
+  "inference": {
+    "model": "models/best.pt",
+    "ok_label": "OK",
+    "ok_count": null,
+    "ok_overlap_iou": 0.8,
+    "center_tolerance": 0.25,
+    "ok_angle_target": 0.0,
+    "ok_angle_tolerance": null,
+    "ok_max_center_distance": null,
+    "ok_min_edge_distance": null,
+    "conf": 0.25,
+    "iou": 0.7,
+    "imgsz": 640,
+    "device": "cpu",
+    "max_det": 300,
+    "ext": [".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"]
+  },
+  "watch": {
+    "poll_seconds": 2,
+    "stable_seconds": 2,
+    "image_wait_timeout_seconds": 300,
+    "retry_seconds": 10,
+    "max_retries": 3,
+    "failure_statuses": ["FAIL", "NG"]
+  },
+  "archive": {
+    "after_success": "archive",
+    "retention_days": null
+  },
+  "review": {
+    "enabled": false,
+    "output_dir": "review",
+    "on_exists": "suffix"
+  },
+  "runtime": {
+    "dry_run": false,
+    "verbose": false,
+    "quiet": false
+  },
+  "http": {
+    "host": "127.0.0.1",
+    "port": 8000
+  }
+}

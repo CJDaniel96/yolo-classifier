@@ -1,0 +1,9 @@
+# Workflow/rules/API tests do not need PyTorch or the trained model.
+fastapi==0.165.0
+uvicorn==0.54.0
+pydantic==2.14.4
+pillow==12.3.0
+numpy==2.5.5
+opencv-python==5.0.0.93
+pytest==9.2.0
+httpx==0.28.1

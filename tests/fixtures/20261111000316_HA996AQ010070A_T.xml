@@ -1,0 +1,149 @@
+<Panel cModel="2103-023701-50" LotNo="" StationId="TEJ12AOIF021" fdate="2026/11/11 00:03:16" CycleTime="16.52" Operator=" " ConfirmTime="2026/11/11 00:03:16" Status="FAIL" Machine="AOI" Carrier="HA996AQ010070A">
+<Board imulti="1" TopBtm="T" BoardSN="70ea6821-4451-4769-abab-c48bcfc983aa" Status="PASS" TotalComp="866" FailComp="0">
+</Board>
+<Board imulti="2" TopBtm="T" BoardSN="a1bc9fab-4670-44dc-9392-70ab53300ad9" Status="PASS" TotalComp="866" FailComp="0">
+</Board>
+<Board imulti="3" TopBtm="T" BoardSN="0b6e0a21-736a-4701-88db-329f342d0dac" Status="PASS" TotalComp="866" FailComp="0">
+</Board>
+<Board imulti="4" TopBtm="T" BoardSN="5c5b3800-2b68-41c0-9807-bc2da3efff19" Status="PASS" TotalComp="866" FailComp="0">
+</Board>
+<Board imulti="5" TopBtm="T" BoardSN="d3abad44-d872-49a4-9dd5-cbbee5dd96c4" Status="FAIL" TotalComp="866" FailComp="2">
+<Component CompName="C6307_RF_5" TB="T" Type="132S00154" PackageType=" " Status="FAIL" MachineDefect="Bridge" ConfirmDefect="" AI_result="" PartNo="132S00154">
+<CompImage>
+<Image PicPath1="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C6307_RF_top.jpg" PicPath2="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C6307_RF_side.jpg" X1="190.291061855233" Y1="77.6337847413375" X2="" Y2="" Camera="1" Angle="90" />
+</CompImage>
+<Window Status="FAIL" AI_result="" ConfirmDefect="" MachineDefect="Bridge" X1="190.146061855232" Y1="77.7837847413375" X2="" Y2="" PicPath1="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C6307_RF_top.jpg" PicPath2="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C6307_RF_side.jpg" WindowInfo="" Name="" />
+</Component>
+<Component CompName="R7451_5" TB="T" Type="152S01527" PackageType=" " Status="FAIL" MachineDefect="Missing" ConfirmDefect="" AI_result="" PartNo="152S01527">
+<CompImage>
+<Image PicPath1="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@R7451_5_top.jpg" PicPath2="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@R7451_5_side.jpg" X1="189.554079719556" Y1="83.3435515450685" X2="" Y2="" Camera="1" Angle="270" />
+</CompImage>
+<Window Status="FAIL" AI_result="" ConfirmDefect="" MachineDefect="Missing" X1="189.57491305289" Y1="83.3435515450685" X2="" Y2="" PicPath1="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@R7451_5_top.jpg" PicPath2="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@R7451_5_side.jpg" WindowInfo="" Name="" />
+</Component>
+</Board>
+<Board imulti="6" TopBtm="T" BoardSN="0696eaea-1e88-48d2-9aee-b32516d774cd" Status="PASS" TotalComp="866" FailComp="0">
+</Board>
+<Board imulti="7" TopBtm="T" BoardSN="8ef22c5e-ef29-460a-80a0-519750e68be7" Status="FAIL" TotalComp="866" FailComp="2">
+<Component CompName="U7402_7" TB="T" Type="353S04220" PackageType=" " Status="FAIL" MachineDefect="Shift" ConfirmDefect="" AI_result="" PartNo="353S04220">
+<CompImage>
+<Image PicPath1="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@U7402_7_top.jpg" PicPath2="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@U7402_7_side.jpg" X1="154.254793703212" Y1="50.2410265141063" X2="" Y2="" Camera="1" Angle="270" />
+</CompImage>
+<Window Status="FAIL" AI_result="" ConfirmDefect="" MachineDefect="Shift" X1="154.053127036545" Y1="50.480193180773" X2="" Y2="" PicPath1="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@U7402_7_top.jpg" PicPath2="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@U7402_7_side.jpg" WindowInfo="" Name="" />
+</Component>
+<Component CompName="C3302_7" TB="T" Type="132S00154" PackageType=" " Status="FAIL" MachineDefect="Bridge" ConfirmDefect="" AI_result="" PartNo="132S00154">
+<CompImage>
+<Image PicPath1="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C3302_7_top.jpg" PicPath2="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C3302_7_side.jpg" X1="153.523355142886" Y1="30.2266921712913" X2="" Y2="" Camera="1" Angle="90" />
+</CompImage>
+<Window Status="FAIL" AI_result="" ConfirmDefect="" MachineDefect="Bridge" X1="153.668355142887" Y1="30.1066921712913" X2="" Y2="" PicPath1="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C3302_7_top.jpg" PicPath2="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C3302_7_side.jpg" WindowInfo="" Name="" />
+</Component>
+</Board>
+<Board imulti="8" TopBtm="T" BoardSN="203d52e7-36b8-4d9d-8177-b3631e9dde3f" Status="FAIL" TotalComp="866" FailComp="1">
+<Component CompName="L4701_8" TB="T" Type="152S1574" PackageType=" " Status="FAIL" MachineDefect="Shift" ConfirmDefect="" AI_result="" PartNo="152S1574">
+<CompImage>
+<Image PicPath1="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@L4701_8_top.jpg" PicPath2="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@L4701_8_side.jpg" X1="165.333892889393" Y1="84.3738013465498" X2="" Y2="" Camera="1" Angle="0" />
+</CompImage>
+<Window Status="FAIL" AI_result="" ConfirmDefect="" MachineDefect="Shift" X1="165.271392889393" Y1="84.3863013465497" X2="" Y2="" PicPath1="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@L4701_8_top.jpg" PicPath2="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@L4701_8_side.jpg" WindowInfo="" Name="" />
+</Component>
+</Board>
+<Board imulti="9" TopBtm="T" BoardSN="9891d2e9-fbd4-4d85-9f36-52e5bc834a14" Status="FAIL" TotalComp="866" FailComp="2">
+<Component CompName="C1109_9" TB="T" Type="138S00202" PackageType=" " Status="FAIL" MachineDefect="Shift" ConfirmDefect="" AI_result="" PartNo="138S00202">
+<CompImage>
+<Image PicPath1="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C1109_9_top.jpg" PicPath2="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C1109_9_side.jpg" X1="169.592258847238" Y1="113.346554765518" X2="" Y2="" Camera="1" Angle="90" />
+</CompImage>
+<Window Status="FAIL" AI_result="" ConfirmDefect="" MachineDefect="Shift" X1="169.579758847238" Y1="113.434054765518" X2="" Y2="" PicPath1="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C1109_9_top.jpg" PicPath2="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C1109_9_side.jpg" WindowInfo="" Name="" />
+</Component>
+<Component CompName="C1231_9" TB="T" Type="138S00202" PackageType=" " Status="FAIL" MachineDefect="Shift" ConfirmDefect="" AI_result="" PartNo="138S00202">
+<CompImage>
+<Image PicPath1="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C1231_9_top.jpg" PicPath2="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C1231_9_side.jpg" X1="175.29167992266" Y1="104.665431631411" X2="" Y2="" Camera="1" Angle="270" />
+</CompImage>
+<Window Status="FAIL" AI_result="" ConfirmDefect="" MachineDefect="Shift" X1="175.30417992266" Y1="104.752931631411" X2="" Y2="" PicPath1="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C1231_9_top.jpg" PicPath2="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C1231_9_side.jpg" WindowInfo="" Name="" />
+</Component>
+</Board>
+<Board imulti="10" TopBtm="T" BoardSN="48953f2b-a098-436e-a64a-9f6a9f2f7a35" Status="FAIL" TotalComp="866" FailComp="1">
+<Component CompName="R1802_10" TB="T" Type="117S00090" PackageType=" " Status="FAIL" MachineDefect="Shift" ConfirmDefect="" AI_result="" PartNo="117S00090">
+<CompImage>
+<Image PicPath1="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@R1802_10_top.jpg" PicPath2="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@R1802_10_side.jpg" X1="127.222437020089" Y1="45.7226908632945" X2="" Y2="" Camera="1" Angle="270" />
+</CompImage>
+<Window Status="FAIL" AI_result="" ConfirmDefect="" MachineDefect="Shift" X1="127.007437020089" Y1="45.4926908632945" X2="" Y2="" PicPath1="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@R1802_10_top.jpg" PicPath2="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@R1802_10_side.jpg" WindowInfo="" Name="" />
+<Window Status="FAIL" AI_result="" ConfirmDefect="" MachineDefect="Shift" X1="127.007437020089" Y1="45.9526908632945" X2="" Y2="" PicPath1="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@R1802_10_top.jpg" PicPath2="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@R1802_10_side.jpg" WindowInfo="" Name="" />
+</Component>
+</Board>
+<Board imulti="11" TopBtm="T" BoardSN="463e08a7-bb3e-4b44-8d80-a8e8501a0eee" Status="PASS" TotalComp="866" FailComp="0">
+</Board>
+<Board imulti="12" TopBtm="T" BoardSN="022c0a99-e6e1-4b13-8fa0-a75cdc77c138" Status="FAIL" TotalComp="866" FailComp="1">
+<Component CompName="Q2820_12" TB="T" Type="376S00528" PackageType=" " Status="FAIL" MachineDefect="Shift" ConfirmDefect="" AI_result="" PartNo="376S00528">
+<CompImage>
+<Image PicPath1="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@Q2820_12_top.jpg" PicPath2="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@Q2820_12_side.jpg" X1="142.484469813567" Y1="92.7961038919995" X2="" Y2="" Camera="1" Angle="90" />
+</CompImage>
+<Window Status="FAIL" AI_result="" ConfirmDefect="" MachineDefect="Shift" X1="141.688636480234" Y1="92.4161038919995" X2="" Y2="" PicPath1="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@Q2820_12_top.jpg" PicPath2="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@Q2820_12_side.jpg" WindowInfo="" Name="" />
+</Component>
+</Board>
+<Board imulti="13" TopBtm="T" BoardSN="13eb78e5-4c61-442b-9cae-1e783590ba4a" Status="PASS" TotalComp="866" FailComp="0">
+</Board>
+<Board imulti="14" TopBtm="T" BoardSN="e1b1d272-4de4-421c-9186-a25050de314d" Status="FAIL" TotalComp="866" FailComp="1">
+<Component CompName="U6301_RF_14" TB="T" Type="197S00478" PackageType=" " Status="FAIL" MachineDefect="Polarity" ConfirmDefect="" AI_result="" PartNo="197S00478">
+<CompImage>
+<Image PicPath1="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@U6301_RF_top.jpg" PicPath2="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@U6301_RF_side.jpg" X1="92.5513068368788" Y1="77.3438015400715" X2="" Y2="" Camera="1" Angle="90" />
+</CompImage>
+<Window Status="FAIL" AI_result="" ConfirmDefect="" MachineDefect="Polarity" X1="92.796222645201" Y1="77.6571218848728" X2="" Y2="" PicPath1="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@U6301_RF_top.jpg" PicPath2="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@U6301_RF_side.jpg" WindowInfo="" Name="" />
+</Component>
+</Board>
+<Board imulti="15" TopBtm="T" BoardSN="ea7b1613-af61-4c43-884e-c6539957b136" Status="PASS" TotalComp="866" FailComp="0">
+</Board>
+<Board imulti="16" TopBtm="T" BoardSN="fb09d504-75dd-4306-be39-d5d65ac99d99" Status="PASS" TotalComp="866" FailComp="0">
+</Board>
+<Board imulti="17" TopBtm="T" BoardSN="b68088a0-7b28-4d84-9034-5a6cde68c4f4" Status="FAIL" TotalComp="866" FailComp="3">
+<Component CompName="C1261_17" TB="T" Type="138S00202" PackageType=" " Status="FAIL" MachineDefect="Shift" ConfirmDefect="" AI_result="" PartNo="138S00202">
+<CompImage>
+<Image PicPath1="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C1261_17_top.jpg" PicPath2="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C1261_17_side.jpg" X1="77.6432256830628" Y1="77.3805805507565" X2="" Y2="" Camera="1" Angle="180" />
+</CompImage>
+<Window Status="FAIL" AI_result="" ConfirmDefect="" MachineDefect="Shift" X1="77.4532256830628" Y1="77.6105805507565" X2="" Y2="" PicPath1="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C1261_17_top.jpg" PicPath2="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C1261_17_side.jpg" WindowInfo="" Name="" />
+</Component>
+<Component CompName="C1267_17" TB="T" Type="138S00202" PackageType=" " Status="FAIL" MachineDefect="Shift" ConfirmDefect="" AI_result="" PartNo="138S00202">
+<CompImage>
+<Image PicPath1="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C1267_17_top.jpg" PicPath2="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C1267_17_side.jpg" X1="76.8539034836517" Y1="77.3921327940665" X2="" Y2="" Camera="1" Angle="180" />
+</CompImage>
+<Window Status="FAIL" AI_result="" ConfirmDefect="" MachineDefect="Shift" X1="76.6639034836518" Y1="77.6221327940665" X2="" Y2="" PicPath1="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C1267_17_top.jpg" PicPath2="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C1267_17_side.jpg" WindowInfo="" Name="" />
+<Window Status="FAIL" AI_result="" ConfirmDefect="" MachineDefect="Shift" X1="77.0439034836517" Y1="77.6221327940665" X2="" Y2="" PicPath1="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C1267_17_top.jpg" PicPath2="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C1267_17_side.jpg" WindowInfo="" Name="" />
+</Component>
+<Component CompName="C1108_17" TB="T" Type="138S00117" PackageType=" " Status="FAIL" MachineDefect="Shift" ConfirmDefect="" AI_result="" PartNo="138S00117">
+<CompImage>
+<Image PicPath1="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C1108_17_top.jpg" PicPath2="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C1108_17_side.jpg" X1="71.0174292004892" Y1="84.6213661306755" X2="" Y2="" Camera="1" Angle="270" />
+</CompImage>
+<Window Status="FAIL" AI_result="" ConfirmDefect="" MachineDefect="Shift" X1="71.0174292004892" Y1="84.5400636164755" X2="" Y2="" PicPath1="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C1108_17_top.jpg" PicPath2="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C1108_17_side.jpg" WindowInfo="" Name="" />
+</Component>
+</Board>
+<Board imulti="18" TopBtm="T" BoardSN="e01fa184-5030-4469-9ca8-c5553237f9ba" Status="FAIL" TotalComp="866" FailComp="2">
+<Component CompName="C7500_18" TB="T" Type="138S00136" PackageType=" " Status="FAIL" MachineDefect="Shift" ConfirmDefect="" AI_result="" PartNo="138S00136">
+<CompImage>
+<Image PicPath1="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C7500_18_top.jpg" PicPath2="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C7500_18_side.jpg" X1="62.4475834615068" Y1="113.682222078248" X2="" Y2="" Camera="1" Angle="270" />
+</CompImage>
+<Window Status="FAIL" AI_result="" ConfirmDefect="" MachineDefect="Shift" X1="62.4600834615067" Y1="113.769722078248" X2="" Y2="" PicPath1="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C7500_18_top.jpg" PicPath2="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C7500_18_side.jpg" WindowInfo="" Name="" />
+</Component>
+<Component CompName="C7502_18" TB="T" Type="138S00117" PackageType=" " Status="FAIL" MachineDefect="Shift" ConfirmDefect="" AI_result="" PartNo="138S00117">
+<CompImage>
+<Image PicPath1="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C7502_18_top.jpg" PicPath2="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C7502_18_side.jpg" X1="63.9945609274822" Y1="114.972885945947" X2="" Y2="" Camera="1" Angle="270" />
+</CompImage>
+<Window Status="FAIL" AI_result="" ConfirmDefect="" MachineDefect="Shift" X1="63.9945609274822" Y1="114.891583431747" X2="" Y2="" PicPath1="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C7502_18_top.jpg" PicPath2="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C7502_18_side.jpg" WindowInfo="" Name="" />
+</Component>
+</Board>
+<Board imulti="19" TopBtm="T" BoardSN="a3cb922c-517f-4066-95cf-3ec74c0fece5" Status="PASS" TotalComp="866" FailComp="0">
+</Board>
+<Board imulti="20" TopBtm="T" BoardSN="95d47c13-bde1-4630-9c76-ccbfc020ed50" Status="FAIL" TotalComp="866" FailComp="2">
+<Component CompName="C6524_20" TB="T" Type="132S00014" PackageType=" " Status="FAIL" MachineDefect="Shift" ConfirmDefect="" AI_result="" PartNo="132S00014">
+<CompImage>
+<Image PicPath1="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C6524_20_top.jpg" PicPath2="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C6524_20_side.jpg" X1="19.6353404832422" Y1="77.7892679744555" X2="" Y2="" Camera="1" Angle="0" />
+</CompImage>
+<Window Status="FAIL" AI_result="" ConfirmDefect="" MachineDefect="Shift" X1="19.4003404832423" Y1="77.7892679744555" X2="" Y2="" PicPath1="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C6524_20_top.jpg" PicPath2="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C6524_20_side.jpg" WindowInfo="" Name="" />
+<Window Status="FAIL" AI_result="" ConfirmDefect="" MachineDefect="Shift" X1="19.4003404832423" Y1="77.7892679744555" X2="" Y2="" PicPath1="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C6524_20_top.jpg" PicPath2="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@C6524_20_side.jpg" WindowInfo="" Name="" />
+</Component>
+<Component CompName="R1646_20" TB="T" Type="118S00266" PackageType=" " Status="FAIL" MachineDefect="Missing" ConfirmDefect="" AI_result="" PartNo="118S00266">
+<CompImage>
+<Image PicPath1="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@R1646_20_top.jpg" PicPath2="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@R1646_20_side.jpg" X1="34.3087729869047" Y1="77.739309154818" X2="" Y2="" Camera="1" Angle="180" />
+</CompImage>
+<Window Status="FAIL" AI_result="" ConfirmDefect="" MachineDefect="Missing" X1="34.3087729869047" Y1="77.739309154818" X2="" Y2="" PicPath1="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@R1646_20_top.jpg" PicPath2="2026-11-11/20261111000316/20261111000316_HA996AQ010070A_T@R1646_20_side.jpg" WindowInfo="" Name="" />
+</Component>
+</Board>
+<Board imulti="21" TopBtm="T" BoardSN="fdabbe4b-9a88-4283-970d-2b45d64aa049" Status="PASS" TotalComp="866" FailComp="0">
+</Board>
+</Panel>

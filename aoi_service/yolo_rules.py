@@ -1,0 +1,934 @@
+#!/usr/bin/env python3
+"""Run Ultralytics YOLO inference and sort review artifacts into OK/NG.
+
+An image is OK only when:
+
+* after duplicate removal, the configured OK class occurs exactly
+  ``--ok-count`` times, or at least once when ``--skip-ok-count`` is used;
+* at least one counted OK object's centre is in the configured image-centre
+  region;
+* no non-OK bounding box is fully contained by an OK bounding box.
+* enabled OBB angle, centre-distance and pairwise-separation limits pass.
+
+Both regular detection and oriented bounding box (OBB) models are supported.
+OBB containment uses the rotated corners, while Pascal VOC annotations use
+the axis-aligned enclosing rectangle because VOC cannot retain rotation.
+
+Non-OK detections outside every OK bounding box are ignored.  If an image has
+no OK detection, any non-OK detection makes it NG.  NG images are saved below
+the class-name folder of the qualifying NG detection with the smallest class
+id.  Rule failures without such a detection use a diagnostic folder.
+
+Each final category contains an ``inference`` directory for rendered
+detections and an ``original`` directory for source images plus Pascal VOC
+XML annotations.  The XML contains every detection returned by the model so
+that the image/annotation pairs can be imported into CVAT for review.
+OBB runs also save per-image JSON measurements, including all pairwise gaps.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import logging
+import math
+import re
+import shutil
+import sys
+import xml.etree.ElementTree as ET
+from dataclasses import asdict, dataclass, fields
+from itertools import combinations
+from pathlib import Path
+from typing import Any, Mapping, Sequence
+
+from PIL import Image
+
+_LOGGER = logging.getLogger("yolo_classify")
+
+_DEFAULT_EXTENSIONS = (
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".bmp",
+    ".tif",
+    ".tiff",
+    ".webp",
+)
+_DIAGNOSTIC_OK_RULE = "_ok_rule"
+_DIAGNOSTIC_NO_DETECTION = "_no_detection"
+_INFERENCE_DIR = "inference"
+_ORIGINAL_DIR = "original"
+
+
+@dataclass(frozen=True)
+class Detection:
+    """Absolute image coordinates: enclosing bbox and optional OBB corners."""
+
+    class_id: int
+    label: str
+    confidence: float
+    bbox: tuple[float, float, float, float]
+    polygon: tuple[tuple[float, float], ...] | None = None
+
+
+@dataclass(frozen=True)
+class ObbRules:
+    """Optional limits in degrees and original-image pixels."""
+
+    angle_target_deg: float = 0.0
+    angle_tolerance_deg: float | None = None
+    max_center_distance_px: float | None = None
+    min_edge_distance_px: float | None = None
+
+    def __post_init__(self) -> None:
+        if not math.isfinite(self.angle_target_deg):
+            raise ValueError("--ok-angle-target must be finite")
+        tolerance = self.angle_tolerance_deg
+        if tolerance is not None and (
+            not math.isfinite(tolerance) or not 0 <= tolerance <= 90
+        ):
+            raise ValueError("--ok-angle-tolerance must be between 0 and 90")
+        for option, value in (
+            ("--ok-max-center-distance", self.max_center_distance_px),
+            ("--ok-min-edge-distance", self.min_edge_distance_px),
+        ):
+            if value is not None and (not math.isfinite(value) or value < 0):
+                raise ValueError(f"{option} must be finite and nonnegative")
+
+    @property
+    def enabled(self) -> bool:
+        """Return whether any additional NG limit is enabled."""
+        return any(value is not None for value in (
+            self.angle_tolerance_deg,
+            self.max_center_distance_px,
+            self.min_edge_distance_px,
+        ))
+
+
+@dataclass(frozen=True)
+class OkObjectMeasurement:
+    """One counted OK object, indexed from one after duplicate handling."""
+
+    index: int
+    confidence: float
+    corners_px: tuple[tuple[float, float], ...]
+    angle_deg: float
+    angle_deviation_deg: float
+    center_x_px: float
+    center_y_px: float
+    offset_x_px: float
+    offset_y_px: float
+    center_distance_px: float
+
+
+@dataclass(frozen=True)
+class OkPairMeasurement:
+    """Shortest separation between two closed OK rectangles."""
+
+    first_index: int
+    second_index: int
+    edge_distance_px: float
+
+
+@dataclass(frozen=True)
+class ObbMeasurements:
+    """Geometry of all counted OK objects, including every pair's gap."""
+
+    image_size: tuple[int, int]
+    raw_ok_count: int
+    effective_ok_count: int
+    rules: ObbRules
+    objects: tuple[OkObjectMeasurement, ...]
+    pairs: tuple[OkPairMeasurement, ...]
+    min_edge_distance_px: float | None
+
+
+@dataclass(frozen=True)
+class Decision:
+    """Classification result and the information used to save it."""
+
+    is_ok: bool
+    reason: str
+    folder: str
+    qualifying_ng: tuple[Detection, ...] = ()
+    measurements: ObbMeasurements | None = None
+
+
+@dataclass(frozen=True)
+class OutputTargets:
+    """Paths for one image's related review artifacts."""
+
+    inference: Path
+    original: Path
+    annotation: Path
+    measurements: Path | None = None
+
+    def all(self) -> tuple[Path, ...]:
+        """Return all paths for collision checks and reservations."""
+        paths = (self.inference, self.original, self.annotation)
+        return paths + ((self.measurements,) if self.measurements else ())
+
+
+@dataclass
+class Stats:
+    """Counters for one CLI run."""
+
+    images_seen: int = 0
+    ok: int = 0
+    ng: int = 0
+    saved: int = 0
+    skipped_existing: int = 0
+    inference_errors: int = 0
+    save_errors: int = 0
+
+    def render(self) -> str:
+        return "\n".join(
+            f"  {item.name:<20}: {getattr(self, item.name)}"
+            for item in fields(self)
+        )
+
+
+def bbox_is_in_image_center(
+    bbox: tuple[float, float, float, float],
+    image_size: tuple[int, int],
+    tolerance: float,
+) -> bool:
+    """Return whether the bbox centre falls in the central tolerance region.
+
+    ``tolerance`` is measured independently along each image axis.  For
+    example, 0.25 accepts bbox centres in the middle 50% of both the image
+    width and height.
+    """
+    width, height = image_size
+    if width <= 0 or height <= 0:
+        return False
+    x1, y1, x2, y2 = bbox
+    center_x = (x1 + x2) / 2 / width
+    center_y = (y1 + y2) / 2 / height
+    return (
+        0.5 - tolerance <= center_x <= 0.5 + tolerance
+        and 0.5 - tolerance <= center_y <= 0.5 + tolerance
+    )
+
+
+def bbox_is_contained(
+    inner: tuple[float, float, float, float],
+    outer: tuple[float, float, float, float],
+) -> bool:
+    """Return whether all four edges of ``inner`` are inside ``outer``."""
+    ix1, iy1, ix2, iy2 = inner
+    ox1, oy1, ox2, oy2 = outer
+    return ox1 <= ix1 and oy1 <= iy1 and ix2 <= ox2 and iy2 <= oy2
+
+
+def detection_is_contained(inner: Detection, outer: Detection) -> bool:
+    """Check full containment using rotated corners when available.
+
+    Args:
+        inner: Detection whose entire box must be inside the outer box.
+        outer: Detection defining the containing rectangle.
+
+    Returns:
+        Whether all inner corners are inside or on the outer boundary.
+    """
+    if outer.polygon is None:
+        return bbox_is_contained(inner.bbox, outer.bbox)
+
+    polygon = outer.polygon
+    edges = tuple(zip(polygon, polygon[1:] + polygon[:1]))
+    signed_area = sum(
+        x1 * y2 - x2 * y1 for (x1, y1), (x2, y2) in edges
+    )
+    if abs(signed_area) <= 1e-12:
+        return False
+    direction = 1 if signed_area > 0 else -1
+
+    corners = inner.polygon
+    if corners is None:
+        x1, y1, x2, y2 = inner.bbox
+        corners = ((x1, y1), (x2, y1), (x2, y2), (x1, y2))
+
+    for (x1, y1), (x2, y2) in edges:
+        dx, dy = x2 - x1, y2 - y1
+        # Allow 0.0001 pixel of roundoff from float32 OBB coordinates.
+        tolerance = 1e-4 * math.hypot(dx, dy)
+        for x, y in corners:
+            cross = dx * (y - y1) - dy * (x - x1)
+            if direction * cross < -tolerance:
+                return False
+    return True
+
+
+def detection_iou(first: Detection, second: Detection) -> float:
+    """Compute intersection over union using the actual detection shapes.
+
+    Args:
+        first: Regular or oriented detection in absolute image coordinates.
+        second: Detection to compare with the first.
+
+    Returns:
+        IoU in [0, 1], or zero if either box has no area.
+    """
+    if first.polygon is None and second.polygon is None:
+        ax1, ay1, ax2, ay2 = first.bbox
+        bx1, by1, bx2, by2 = second.bbox
+        first_area = max(0.0, ax2 - ax1) * max(0.0, ay2 - ay1)
+        second_area = max(0.0, bx2 - bx1) * max(0.0, by2 - by1)
+        intersection = (
+            max(0.0, min(ax2, bx2) - max(ax1, bx1))
+            * max(0.0, min(ay2, by2) - max(ay1, by1))
+        )
+    else:
+        # OpenCV and NumPy are included with Ultralytics. Keep regular-box
+        # classification independent of these heavier geometry imports.
+        import cv2
+        import numpy as np
+
+        polygons = []
+        for detection in (first, second):
+            corners = detection.polygon
+            if corners is None:
+                x1, y1, x2, y2 = detection.bbox
+                corners = ((x1, y1), (x2, y1), (x2, y2), (x1, y2))
+            polygons.append(np.asarray(corners, dtype=np.float32))
+        first_area = cv2.contourArea(polygons[0])
+        second_area = cv2.contourArea(polygons[1])
+        if first_area <= 0.0 or second_area <= 0.0:
+            return 0.0
+        intersection, _ = cv2.intersectConvexConvex(
+            polygons[0], polygons[1], handleNested=True,
+        )
+
+    if first_area <= 0.0 or second_area <= 0.0:
+        return 0.0
+    intersection = max(0.0, min(intersection, first_area, second_area))
+    union = first_area + second_area - intersection
+    return intersection / union
+
+
+def deduplicate_ok_detections(
+    detections: Sequence[Detection],
+    iou_threshold: float,
+) -> list[Detection]:
+    """Keep one highest-confidence box per group of near-identical OK boxes.
+
+    Every pair within a group must meet the IoU threshold, so a chain of
+    overlaps cannot collapse separate endpoints into a single object.
+    Representatives retain their original order. Zero disables grouping.
+    """
+    if iou_threshold <= 0 or len(detections) < 2:
+        return list(detections)
+
+    groups: list[list[tuple[int, Detection]]] = []
+    for indexed in sorted(
+        enumerate(detections), key=lambda item: item[1].confidence, reverse=True,
+    ):
+        _, detection = indexed
+        for group in groups:
+            if all(
+                detection_iou(detection, member) >= iou_threshold
+                for _, member in group
+            ):
+                group.append(indexed)
+                break
+        else:
+            groups.append([indexed])
+
+    return [
+        detection for _, detection in sorted(
+            (group[0] for group in groups), key=lambda item: item[0],
+        )
+    ]
+
+
+def detection_corners(
+    detection: Detection,
+) -> tuple[tuple[float, float], ...]:
+    """Return ordered OBB vertices or regular rectangle corners."""
+    if detection.polygon is not None:
+        return detection.polygon
+    x1, y1, x2, y2 = detection.bbox
+    return ((x1, y1), (x2, y1), (x2, y2), (x1, y2))
+
+
+def obb_angle_degrees(detection: Detection) -> float:
+    """Return the long-axis angle clockwise from horizontal in [-90, 90).
+
+    Opposite edges and rotations by 180 degrees describe the same axis.
+    Square boxes use the axis closest to horizontal to break the tie.
+    """
+    if detection.polygon is None:
+        raise ValueError("OBB angle measurement requires rotated corners")
+    corners = detection.polygon
+    candidates = []
+    for first, second in zip(corners, corners[1:] + corners[:1]):
+        dx, dy = second[0] - first[0], second[1] - first[1]
+        length = math.hypot(dx, dy)
+        angle = (math.degrees(math.atan2(dy, dx)) + 90) % 180 - 90
+        candidates.append((length, angle))
+    longest = max(length for length, _ in candidates)
+    if longest <= 0:
+        raise ValueError("Cannot measure an OBB with zero-length edges")
+    return min(
+        (angle for length, angle in candidates
+         if math.isclose(length, longest, rel_tol=1e-6)),
+        key=lambda angle: (abs(angle), angle),
+    )
+
+
+def _point_segment_distance(
+    point: tuple[float, float],
+    start: tuple[float, float],
+    end: tuple[float, float],
+) -> float:
+    """Return the distance to a finite segment, including its endpoints."""
+    dx, dy = end[0] - start[0], end[1] - start[1]
+    squared_length = dx * dx + dy * dy
+    if squared_length == 0:
+        return math.hypot(point[0] - start[0], point[1] - start[1])
+    projection = (
+        (point[0] - start[0]) * dx + (point[1] - start[1]) * dy
+    ) / squared_length
+    projection = max(0.0, min(1.0, projection))
+    return math.hypot(
+        point[0] - start[0] - projection * dx,
+        point[1] - start[1] - projection * dy,
+    )
+
+
+def detection_edge_distance(first: Detection, second: Detection) -> float:
+    """Return exact rectangle separation in pixels; overlap/touch is zero.
+
+    Separating-axis projections detect intersection and containment.  For
+    disjoint convex rectangles, the nearest points lie on a vertex and an
+    opposing segment (including its endpoints).
+    """
+    first_corners, second_corners = map(detection_corners, (first, second))
+    first_edges = tuple(zip(
+        first_corners, first_corners[1:] + first_corners[:1]
+    ))
+    second_edges = tuple(zip(
+        second_corners, second_corners[1:] + second_corners[:1]
+    ))
+    axes = [(1.0, 0.0), (0.0, 1.0)]
+    axes.extend(
+        (-(end[1] - start[1]), end[0] - start[0])
+        for start, end in first_edges + second_edges
+    )
+    for nx, ny in axes:
+        first_projection = [nx * x + ny * y for x, y in first_corners]
+        second_projection = [nx * x + ny * y for x, y in second_corners]
+        if (
+            max(first_projection) < min(second_projection)
+            or max(second_projection) < min(first_projection)
+        ):
+            break
+    else:
+        return 0.0
+
+    return min(
+        _point_segment_distance(point, start, end)
+        for points, edges in (
+            (first_corners, second_edges), (second_corners, first_edges)
+        )
+        for point in points
+        for start, end in edges
+    )
+
+
+def measure_ok_objects(
+    detections: Sequence[Detection],
+    image_size: tuple[int, int],
+    raw_ok_count: int,
+    rules: ObbRules,
+) -> ObbMeasurements:
+    """Measure counted OK OBBs using original-image pixel coordinates."""
+    width, height = image_size
+    objects = []
+    for index, detection in enumerate(detections, 1):
+        corners = detection_corners(detection)
+        center_x = sum(x for x, _ in corners) / len(corners)
+        center_y = sum(y for _, y in corners) / len(corners)
+        dx, dy = center_x - width / 2, center_y - height / 2
+        angle = obb_angle_degrees(detection)
+        deviation = abs((angle - rules.angle_target_deg + 90) % 180 - 90)
+        objects.append(OkObjectMeasurement(
+            index=index,
+            confidence=detection.confidence,
+            corners_px=corners,
+            angle_deg=angle,
+            angle_deviation_deg=deviation,
+            center_x_px=center_x,
+            center_y_px=center_y,
+            offset_x_px=dx,
+            offset_y_px=dy,
+            center_distance_px=math.hypot(dx, dy),
+        ))
+    pairs = tuple(
+        OkPairMeasurement(i, j, detection_edge_distance(first, second))
+        for (i, first), (j, second)
+        in combinations(enumerate(detections, 1), 2)
+    )
+    return ObbMeasurements(
+        image_size=image_size,
+        raw_ok_count=raw_ok_count,
+        effective_ok_count=len(detections),
+        rules=rules,
+        objects=tuple(objects),
+        pairs=pairs,
+        min_edge_distance_px=min(
+            (pair.edge_distance_px for pair in pairs), default=None
+        ),
+    )
+
+
+def _measurement_summary(measurements: ObbMeasurements) -> str:
+    """Format measured values for the image log and dry-run output."""
+    parts = [
+        f"OK#{item.index}: angle={item.angle_deg:.2f}deg, "
+        f"centre_distance={item.center_distance_px:.2f}px "
+        f"(dx={item.offset_x_px:.2f}, dy={item.offset_y_px:.2f})"
+        for item in measurements.objects
+    ]
+    if measurements.min_edge_distance_px is not None:
+        parts.append(
+            f"minimum edge distance={measurements.min_edge_distance_px:.2f}px"
+        )
+    return "; OBB measurements: " + ("; ".join(parts) or "no OK objects")
+
+
+def _obb_rule_failures(measurements: ObbMeasurements) -> list[str]:
+    """Return every enabled geometry-rule failure, with measured values."""
+    rules = measurements.rules
+    failures = []
+    for item in measurements.objects:
+        if (
+            rules.angle_tolerance_deg is not None
+            and item.angle_deviation_deg > rules.angle_tolerance_deg + 1e-6
+        ):
+            failures.append(
+                f"OK#{item.index} angle {item.angle_deg:.2f}deg deviates "
+                f"{item.angle_deviation_deg:.2f}deg from target "
+                f"{rules.angle_target_deg:.2f}deg "
+                f"(allowed {rules.angle_tolerance_deg:.2f}deg)"
+            )
+        if (
+            rules.max_center_distance_px is not None
+            and item.center_distance_px > rules.max_center_distance_px + 1e-6
+        ):
+            failures.append(
+                f"OK#{item.index} centre distance "
+                f"{item.center_distance_px:.2f}px exceeds "
+                f"{rules.max_center_distance_px:.2f}px"
+            )
+    if rules.min_edge_distance_px is not None:
+        for pair in measurements.pairs:
+            if pair.edge_distance_px + 1e-6 < rules.min_edge_distance_px:
+                failures.append(
+                    f"OK#{pair.first_index}/OK#{pair.second_index} edge "
+                    f"distance {pair.edge_distance_px:.2f}px below "
+                    f"{rules.min_edge_distance_px:.2f}px"
+                )
+    return failures
+
+
+def safe_folder_name(label: str) -> str:
+    """Make a model label safe to use as one folder name."""
+    cleaned = re.sub(r"[^\w.-]+", "_", label, flags=re.UNICODE)
+    cleaned = cleaned.strip(" .")
+    return cleaned or "_unnamed_label"
+
+
+def classify_detections(
+    detections: Sequence[Detection],
+    ok_class_id: int,
+    ok_count: int | None,
+    image_size: tuple[int, int],
+    center_tolerance: float,
+    ok_overlap_iou: float = 0.8,
+    obb_rules: ObbRules | None = None,
+) -> Decision:
+    """Apply AOI rules after removing near-identical OK detections.
+
+    Duplicate groups require pairwise IoU >= ``ok_overlap_iou``. Each group's
+    highest-confidence box is used for counting, centre and geometry checks.
+    NG containment always uses every original OK box, and input detections
+    are left intact for review. Set ``ok_overlap_iou`` to zero to disable
+    duplicate removal in every count mode.
+    Set ``ok_count`` to None to require at least one OK object without an
+    exact count; duplicate removal and the other checks still apply.
+    At least one representative must meet ``center_tolerance``. Every
+    representative still participates in enabled OBB geometry checks.
+    OBB measurements are automatic; optional ``obb_rules`` enable additional
+    angle, radial centre-offset and edge-separation limits.
+    """
+    ok_detections = [
+        detection
+        for detection in detections
+        if detection.class_id == ok_class_id
+    ]
+    other_detections = [
+        detection
+        for detection in detections
+        if detection.class_id != ok_class_id
+    ]
+    raw_ok_count = len(ok_detections)
+
+    if ok_detections:
+        qualifying_ng = [
+            ng_detection
+            for ng_detection in other_detections
+            if any(
+                detection_is_contained(ng_detection, ok_detection)
+                for ok_detection in ok_detections
+            )
+        ]
+    else:
+        # With no OK object as a reference, every detected non-OK class is NG.
+        qualifying_ng = list(other_detections)
+
+    overlap_note = ""
+    ok_detections = deduplicate_ok_detections(ok_detections, ok_overlap_iou)
+    if len(ok_detections) < raw_ok_count:
+        overlap_note = (
+            f"; counted {raw_ok_count} overlapping OK boxes as "
+            f"{len(ok_detections)} (IoU threshold={ok_overlap_iou:.3f})"
+        )
+
+    measurements = None
+    if obb_rules is not None or any(d.polygon is not None for d in detections):
+        measurements = measure_ok_objects(
+            ok_detections, image_size, raw_ok_count, obb_rules or ObbRules()
+        )
+        overlap_note += _measurement_summary(measurements)
+
+    if ok_count is None and not ok_detections:
+        return _ng_decision(
+            f"No OK objects detected (at least one required){overlap_note}",
+            qualifying_ng,
+            detections,
+            measurements,
+        )
+
+    if ok_count is not None and len(ok_detections) != ok_count:
+        reason = (
+            f"OK count mismatch: expected {ok_count}, "
+            f"detected {len(ok_detections)}{overlap_note}"
+        )
+        return _ng_decision(reason, qualifying_ng, detections, measurements)
+
+    centered_count = sum(
+        bbox_is_in_image_center(detection.bbox, image_size, center_tolerance)
+        for detection in ok_detections
+    )
+    if centered_count == 0:
+        return _ng_decision(
+            f"All {len(ok_detections)} OK bbox centre(s) "
+            f"outside image centre region{overlap_note}",
+            qualifying_ng,
+            detections,
+            measurements,
+        )
+
+    if measurements is not None:
+        failures = _obb_rule_failures(measurements)
+        if failures:
+            return _ng_decision(
+                "; ".join(failures) + overlap_note,
+                qualifying_ng,
+                detections,
+                measurements,
+            )
+
+    if qualifying_ng:
+        labels = ", ".join(
+            f"{d.label}(id={d.class_id})" for d in qualifying_ng
+        )
+        return _ng_decision(
+            f"NG bbox contained by OK bbox: {labels}{overlap_note}",
+            qualifying_ng,
+            detections,
+            measurements,
+        )
+
+    return Decision(
+        is_ok=True,
+        reason=(
+            f"detected {len(ok_detections)} OK object(s); "
+            f"{centered_count} centre(s) inside image centre region; "
+            f"no contained NG bbox{overlap_note}"
+        ),
+        folder="OK",
+        measurements=measurements,
+    )
+
+
+def _ng_decision(
+    reason: str,
+    qualifying_ng: Sequence[Detection],
+    all_detections: Sequence[Detection],
+    measurements: ObbMeasurements | None = None,
+) -> Decision:
+    """Build an NG decision using the lowest qualifying class id."""
+    ordered = tuple(
+        sorted(qualifying_ng, key=lambda item: (item.class_id, item.label))
+    )
+    if ordered:
+        folder = safe_folder_name(ordered[0].label)
+    elif all_detections:
+        folder = _DIAGNOSTIC_OK_RULE
+    else:
+        folder = _DIAGNOSTIC_NO_DETECTION
+    return Decision(
+        is_ok=False,
+        reason=reason,
+        folder=folder,
+        qualifying_ng=ordered,
+        measurements=measurements,
+    )
+
+
+def normalize_names(names: Mapping[int, str] | Sequence[str]) -> dict[int, str]:
+    """Normalize Ultralytics' dict/list class-name representation."""
+    if isinstance(names, Mapping):
+        return {int(class_id): str(name) for class_id, name in names.items()}
+    return {class_id: str(name) for class_id, name in enumerate(names)}
+
+
+def resolve_ok_class_id(names: Mapping[int, str], ok_label: str) -> int:
+    """Resolve an exact class name to its id, raising a helpful error."""
+    matches = [
+        class_id for class_id, name in names.items() if name == ok_label
+    ]
+    if not matches:
+        available = ", ".join(
+            f"{class_id}:{name}" for class_id, name in sorted(names.items())
+        )
+        raise ValueError(
+            f"OK label {ok_label!r} is not in the model. "
+            f"Available labels: {available}"
+        )
+    return min(matches)
+
+
+def detections_from_result(
+    result: Any,
+    names: Mapping[int, str],
+) -> list[Detection]:
+    """Convert regular or OBB results to absolute-coordinate detections."""
+    obb = getattr(result, "obb", None)
+    boxes = obb if obb is not None else result.boxes
+    if boxes is None or len(boxes) == 0:
+        return []
+
+    boxes = boxes.cpu()
+    class_ids = boxes.cls.tolist()
+    confidences = boxes.conf.tolist()
+    coordinates = boxes.xyxy.tolist()
+    polygons = (
+        boxes.xyxyxyxy.tolist() if obb is not None else [None] * len(boxes)
+    )
+    return [
+        Detection(
+            class_id=int(class_id),
+            label=names.get(int(class_id), f"class_{int(class_id)}"),
+            confidence=float(confidence),
+            bbox=tuple(float(value) for value in bbox),
+            polygon=(
+                tuple((float(x), float(y)) for x, y in polygon)
+                if polygon is not None else None
+            ),
+        )
+        for class_id, confidence, bbox, polygon
+        in zip(class_ids, confidences, coordinates, polygons, strict=True)
+    ]
+
+
+def find_images(
+    source: Path,
+    extensions: tuple[str, ...],
+    output_dir: Path,
+) -> list[Path]:
+    """Find one source image or recursively scan a source directory."""
+    if source.is_file():
+        return [source] if source.suffix.lower() in extensions else []
+
+    resolved_output = output_dir.resolve()
+    images: list[Path] = []
+    for path in sorted(source.rglob("*")):
+        if not path.is_file() or path.suffix.lower() not in extensions:
+            continue
+        if path.resolve().is_relative_to(resolved_output):
+            continue
+        images.append(path)
+    return images
+
+
+def output_targets(
+    category_dir: Path,
+    filename: str,
+    include_measurements: bool = False,
+) -> OutputTargets:
+    """Build the related output paths for one final category."""
+    return OutputTargets(
+        inference=category_dir / _INFERENCE_DIR / filename,
+        original=category_dir / _ORIGINAL_DIR / filename,
+        annotation=category_dir / _ORIGINAL_DIR / Path(filename).with_suffix(
+            ".xml"
+        ).name,
+        measurements=(
+            category_dir / "measurements" / Path(filename).with_suffix(
+                ".json"
+            ).name if include_measurements else None
+        ),
+    )
+
+
+def unique_output_targets(
+    category_dir: Path,
+    filename: str,
+    used: set[Path],
+    on_exists: str,
+    include_measurements: bool = False,
+) -> OutputTargets | None:
+    """Choose synchronized, non-colliding artifact paths."""
+    targets = output_targets(category_dir, filename, include_measurements)
+    paths = targets.all()
+    if not any(path in used for path in paths):
+        if not any(path.exists() for path in paths) or on_exists == "overwrite":
+            return targets
+        if on_exists == "skip":
+            return None
+
+    index = 1
+    while True:
+        source_name = Path(filename)
+        candidate_name = (
+            f"{source_name.stem}_{index}{source_name.suffix}"
+        )
+        candidate = output_targets(
+            category_dir, candidate_name, include_measurements
+        )
+        candidate_paths = candidate.all()
+        if not any(path in used for path in candidate_paths) and not any(
+            path.exists() for path in candidate_paths
+        ):
+            return candidate
+        index += 1
+
+
+def save_annotated_result(result: Any, target: Path) -> None:
+    """Render YOLO boxes/labels and save the annotated image."""
+    plotted_bgr = result.plot()
+    plotted_rgb = plotted_bgr[..., ::-1]
+    image = Image.fromarray(plotted_rgb)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    image.save(target)
+
+
+def _voc_coordinate_pair(
+    lower: float,
+    upper: float,
+    limit: int,
+) -> tuple[int, int]:
+    """Convert one floating-point bbox axis to clamped VOC coordinates."""
+    low = max(0, min(limit, math.floor(min(lower, upper))))
+    high = max(0, min(limit, math.ceil(max(lower, upper))))
+    return low, high
+
+
+def write_pascal_voc(
+    target: Path,
+    image_path: Path,
+    image_size: tuple[int, int],
+    depth: int,
+    detections: Sequence[Detection],
+) -> None:
+    """Write VOC boxes, using axis-aligned enclosing rectangles for OBB."""
+    width, height = image_size
+    annotation = ET.Element("annotation")
+    ET.SubElement(annotation, "folder").text = image_path.parent.name
+    ET.SubElement(annotation, "filename").text = image_path.name
+
+    source = ET.SubElement(annotation, "source")
+    ET.SubElement(source, "database").text = "YOLO inference"
+
+    size = ET.SubElement(annotation, "size")
+    ET.SubElement(size, "width").text = str(width)
+    ET.SubElement(size, "height").text = str(height)
+    ET.SubElement(size, "depth").text = str(depth)
+    ET.SubElement(annotation, "segmented").text = "0"
+
+    for detection in detections:
+        x1, y1, x2, y2 = detection.bbox
+        xmin, xmax = _voc_coordinate_pair(x1, x2, width)
+        ymin, ymax = _voc_coordinate_pair(y1, y2, height)
+        is_truncated = (
+            min(x1, x2) < 0
+            or min(y1, y2) < 0
+            or max(x1, x2) > width
+            or max(y1, y2) > height
+        )
+
+        item = ET.SubElement(annotation, "object")
+        ET.SubElement(item, "name").text = detection.label
+        ET.SubElement(item, "pose").text = "Unspecified"
+        ET.SubElement(item, "truncated").text = "1" if is_truncated else "0"
+        ET.SubElement(item, "difficult").text = "0"
+        box = ET.SubElement(item, "bndbox")
+        ET.SubElement(box, "xmin").text = str(xmin)
+        ET.SubElement(box, "ymin").text = str(ymin)
+        ET.SubElement(box, "xmax").text = str(xmax)
+        ET.SubElement(box, "ymax").text = str(ymax)
+
+    ET.indent(annotation, space="  ")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    ET.ElementTree(annotation).write(
+        target,
+        encoding="utf-8",
+        xml_declaration=True,
+    )
+
+
+def save_review_artifacts(
+    result: Any,
+    source: Path,
+    targets: OutputTargets,
+    detections: Sequence[Detection],
+    image_size: tuple[int, int],
+    decision: Decision | None = None,
+) -> None:
+    """Save review images, VOC XML and optional OBB measurements JSON."""
+    if targets.measurements is not None and (
+        decision is None or decision.measurements is None
+    ):
+        raise ValueError("OBB measurement output requires a measured decision")
+    save_annotated_result(result, targets.inference)
+    targets.original.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, targets.original)
+    with Image.open(source) as image:
+        depth = len(image.getbands())
+    write_pascal_voc(
+        target=targets.annotation,
+        image_path=targets.original,
+        image_size=image_size,
+        depth=depth,
+        detections=detections,
+    )
+    if targets.measurements is not None and decision is not None:
+        payload = {
+            "image": targets.original.name,
+            "verdict": "OK" if decision.is_ok else "NG",
+            "reason": decision.reason,
+            "angle_convention": (
+                "long axis, clockwise from image horizontal, [-90, 90) deg"
+            ),
+            "distance_unit": "original-image pixels",
+            "measurements": asdict(decision.measurements),
+        }
+        targets.measurements.parent.mkdir(parents=True, exist_ok=True)
+        targets.measurements.write_text(
+            json.dumps(payload, indent=2, ensure_ascii=False, allow_nan=False)
+            + "\n",
+            encoding="utf-8",
+        )

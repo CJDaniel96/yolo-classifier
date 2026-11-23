@@ -1,0 +1,24 @@
+[project]
+name = "yolo-classifier"
+version = "0.2.0"
+description = "Windows AOI XML folder service with YOLO OBB inference and verified archival"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi==0.165.0", "uvicorn==0.54.0", "pydantic==2.14.4",
+    "pillow==12.3.0", "ultralytics==8.4.110",
+    "torch==2.13.0", "torchvision==0.28.0", "numpy==2.5.5", "opencv-python==5.0.0.93",
+]
+
+[project.scripts]
+aoi-service = "aoi_service.__main__:main"
+
+[build-system]
+requires = ["setuptools==84.2.1"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["aoi_service*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
